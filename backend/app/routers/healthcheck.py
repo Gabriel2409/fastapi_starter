@@ -1,8 +1,8 @@
+import logging
 from typing import Annotated
 
 from app.config import Settings, get_settings
 from fastapi import APIRouter, Depends
-import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
