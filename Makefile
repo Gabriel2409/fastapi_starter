@@ -4,7 +4,7 @@ PROJECT_DIR=.
 # fastapi app dir
 BACKEND_DIR=./backend
 
-.PHONY: help git check-prerequisites create-env-file venv install
+.PHONY: help git check-prerequisites create-env-file venv install generate-requirements-txt
 
 # Display help message
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  - create-env-file: creates .env file from .env.example files"
 	@echo "  - venv: Create the python virtual environment and install dependencies"
 	@echo "  - install: checks that necessary tools are installed then launches venv target"
+	@echo "  - generate-requirements-txt: generates a requirements.txt file from pyproject.toml"
 	@echo "  - pytest-cov: Runs pytest with html coverage"
 	@echo "  - clean: Remove generated files or directories."
 
@@ -29,7 +30,7 @@ git:
 # just here to make install fail if we don't have the right tools
 # You can add the extra tools you need here
 check-prerequisites:
-	@command -v python >/dev/null 2>&1 || { echo >&2 "Python is not installed. Aborting."; exit 1; }
+	@command -v uv >/dev/null 2>&1 || { echo >&2 "uv is not installed. Aborting."; exit 1; }
 
 # I like to have an .env.example file which shows what structure the .env file must have
 # The idea is to copy the .env.example file to .env if it doesn't exist then modify
@@ -37,35 +38,19 @@ check-prerequisites:
 create-env-file:
 	@test -e ${BACKEND_DIR}/.env || (echo "Creating ${BACKEND_DIR}/.env file, please update the fields" && cp ${BACKEND_DIR}/.env.example ${BACKEND_DIR}/.env )
 
-# inspired by https://stackoverflow.com/questions/24736146/how-to-use-virtualenv-in-makefile
-# venv is a phony target: to know if we must update it we look at the touchfile, which is
-# defined below
-venv: ${PROJECT_DIR}/venv/touchfile
-
-# checks for requirements and requirements-dev files, launches script if they were modified
-# then we touch the venv/touchfile so that its timestamp is more recent than the requirements files
-# This ensures that, when we launch the venv target, it will only run if one of the requirements files
-# was modified or if the venv/touchfile doesn't exist (for example if we just cloned the repo)
-${PROJECT_DIR}/venv/touchfile: ${PROJECT_DIR}/requirements.txt ${PROJECT_DIR}/requirements-dev.txt
+venv:
 	@echo "Setting up python virtual environment..."
 	cd ${PROJECT_DIR} && \
-		test -d venv || python -m venv venv
-		. venv/bin/activate && \
-		pip install --upgrade pip && \
-		pip install -r ${PROJECT_DIR}/requirements.txt && \
-		pip install -r ${PROJECT_DIR}/requirements-dev.txt && \
-		pre-commit install && \
-		pre-commit autoupdate
-	touch ${PROJECT_DIR}/venv/touchfile
-
-
+		uv sync && \
+		uv run -- pre-commit install && \
+		uv run -- pre-commit autoupdate
 
 # make install will just run all the targets
-install: git check-prerequisites create-env-file venv
+install: git check-prerequisites create-env-file venv generate-requirements-txt
 	@echo "Installation complete. Don't forget to activate environment"
 
 pytest-cov:
-	. venv/bin/activate && pytest -vv --cov=. --cov-report=html --cov-report=term
+	uv run -- pytest -vvrA --cov=. --cov-report=html --cov-report=term
 
 # deletes the virtual environment
 clean:
@@ -77,9 +62,10 @@ clean:
 	find . -type d -name 'htmlcov' -exec rm -rf {} +
 	find . -name '.coverage' -exec rm -rf {} +
 	@echo "Removing python virtual environment..."
-	rm -rf ${PROJECT_DIR}/venv
+	rm -rf ${PROJECT_DIR}/.venv
 
-
+generate-requirements-txt:
+	uv pip compile --generate-hashes pyproject.toml -o requirements.txt >> /dev/null
 
 # if you have docker installed.
 
